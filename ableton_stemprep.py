@@ -33,6 +33,14 @@ MAX_FADER = 1.99526231  # +6 dB, the top of Live's track fader
 SEND_MIN = 0.0003162277571  # -inf on a send knob
 DEFAULT_VOCAL_PATTERN = r"(?i)(\bvox\b|vocal|\bvoc\b|acapella|a cappella|adlib|보컬)"
 PRE_GAIN_NAME = "STEM pre-gain"
+# Devices that react to the level of the summed signal: a copy on every track
+# does not give the same result as one instance on the group bus.
+SUMMING_DEVICES = {"Compressor2", "Compressor", "GlueCompressor", "Limiter", "MultibandDynamics", "Gate",
+                   "DrumBuss", "Saturator", "Overdrive", "Pedal", "Amp", "Redux", "Redux2", "Erosion",
+                   "VinylDistortion", "Roar", "DynamicTube", "Tube"}
+# Plugins and Max devices: contents unknown, they may well be dynamics or distortion.
+OPAQUE_DEVICES = {"PluginDevice", "AuPluginDevice", "MxDeviceAudioEffect", "MxDeviceMidiEffect",
+                  "MxDeviceInstrument"}
 # Devices with free-running modulation: separate copies may not stay in phase.
 MODULATION_DEVICES = {"Chorus2", "Chorus", "Phaser", "PhaserNew", "Flanger", "AutoPan", "AutoFilter",
                       "FrequencyShifter", "Shifter"}
@@ -435,6 +443,16 @@ def flatten_group(model, g, ids, utility_template, copy_fx, report):
             "group effects NOT copied (%s): %s" % (
                 "vocal group, kept raw" if entry["vocal"] else "--no-fx",
                 ", ".join(entry["group_fx"])))
+    summing = sorted({d.tag for d in g_devices if d.tag in SUMMING_DEVICES})
+    opaque = sorted({d.tag for d in g_devices if d.tag in OPAQUE_DEVICES})
+    if do_fx and summing:
+        entry["warnings"].append(
+            "%s react to the summed signal: the stems will not add up to the group bus (audible difference); "
+            "use --keep-nonlinear to export this group as one stem instead" % ", ".join(summing))
+    if do_fx and opaque:
+        entry["warnings"].append(
+            "plugin/Max devices in the group chain (%d) cannot be checked; if they are dynamics or "
+            "distortion the stems will not add up to the group bus" % sum(d.tag in OPAQUE_DEVICES for d in g_devices))
     moving = sorted({d.tag for d in g_devices if d.tag in MODULATION_DEVICES})
     if do_fx and moving:
         entry["warnings"].append(
@@ -803,6 +821,11 @@ def run(args):
             report["kept"].append({"group": name(g), "reason": "; ".join(reasons)})
             continue
         copy_fx = not args.no_fx and (args.copy_vocal_fx or not model.is_vocal(g))
+        if copy_fx and args.keep_nonlinear and (devices_el(g) is not None):
+            hit = sorted({d.tag for d in devices_el(g) if d.tag in SUMMING_DEVICES})
+            if hit:
+                report["kept"].append({"group": name(g), "reason": "--keep-nonlinear: %s" % ", ".join(hit)})
+                continue
         try:
             flatten_group(model, g, ids, utility, copy_fx, report["groups"])
         except StemPrepError as e:  # raised before the group is changed
@@ -954,6 +977,8 @@ def build_parser():
     r.add_argument("--only", action="append", default=[], metavar="NAME",
                    help="flatten only these groups (repeatable)")
     r.add_argument("--no-fx", action="store_true", help="never copy group effects (gain only)")
+    r.add_argument("--keep-nonlinear", action="store_true",
+                   help="leave groups with compressors, limiters, saturators etc. as they are (one stem for the group)")
     r.add_argument("--copy-vocal-fx", action="store_true", help="copy effects of vocal groups too")
     r.add_argument("--strip-vocal-fx", action="store_true",
                    help="remove all devices from vocal audio tracks (raw vocals)")

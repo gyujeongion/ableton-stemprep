@@ -172,6 +172,30 @@ class FlattenEffects(Base):
         new = lin(-11.5) * sp.volume(t) * sp.send_amount(sp.send_holders(t)[0])
         self.assertAlmostEqual(new, lin(-11.5) * 0.4, places=6)
 
+    def make_dynamics(self):
+        g = fx.track("GroupTrack", 1, "bus", devices=[fx.device("Eq8", 0), fx.device("Compressor2", 1)])
+        k = fx.track("AudioTrack", 2, "x", group=1, out="AudioOut/GroupTrack")
+        self.build([g, k])
+
+    def test_summing_effects_are_flagged(self):
+        self.make_dynamics()
+        report, _ = self.run_tool("--range", "none")
+        self.assertTrue(any("Compressor2 react" in w for w in report["groups"][0]["warnings"]))
+
+    def test_keep_nonlinear_leaves_group(self):
+        self.make_dynamics()
+        report, out = self.run_tool("--range", "none", "--keep-nonlinear")
+        self.assertEqual(report["groups"], [])
+        self.assertIn("Compressor2", report["kept"][0]["reason"])
+        self.assertEqual(len(sp.all_tracks(out)), 2)
+
+    def test_opaque_plugins_are_flagged(self):
+        g = fx.track("GroupTrack", 1, "bus", devices=[fx.device("PluginDevice")])
+        k = fx.track("AudioTrack", 2, "x", group=1, out="AudioOut/GroupTrack")
+        self.build([g, k])
+        report, _ = self.run_tool("--range", "none")
+        self.assertTrue(any("plugin/Max" in w for w in report["groups"][0]["warnings"]))
+
     def test_modulation_effects_are_flagged(self):
         g = fx.track("GroupTrack", 1, "pads", devices=[fx.device("Chorus2")])
         k = fx.track("AudioTrack", 2, "pad", group=1, out="AudioOut/GroupTrack")
