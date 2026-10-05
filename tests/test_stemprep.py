@@ -85,6 +85,19 @@ class FlattenGain(Base):
         self.assertAlmostEqual(amounts[0], 0.8)
         self.assertAlmostEqual(amounts[1], 0.4)
 
+    def test_group_solo_carried_to_children_and_reported(self):
+        self.build([
+            fx.track("GroupTrack", 1, "g", solo=True),
+            fx.track("AudioTrack", 2, "x", group=1, out="AudioOut/GroupTrack"),
+            fx.track("AudioTrack", 3, "y", group=1, out="AudioOut/GroupTrack"),
+            fx.track("AudioTrack", 4, "other"),
+        ])
+        report, out = self.run_tool("--range", "none")
+        self.assertTrue(sp.is_solo(self.track(out, "x")))
+        self.assertTrue(sp.is_solo(self.track(out, "y")))
+        self.assertFalse(sp.is_solo(self.track(out, "other")))
+        self.assertTrue(any("solo is active" in w for w in report["warnings"]))
+
     def test_group_off_mutes_children(self):
         self.build([
             fx.track("GroupTrack", 1, "g", on=False),

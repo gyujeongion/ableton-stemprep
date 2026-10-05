@@ -173,6 +173,10 @@ def is_on(t):
     return val(mixer(t), "Speaker/Manual", "true") == "true"
 
 
+def is_solo(t):
+    return val(mixer(t), "SoloSink", "false") == "true"
+
+
 def is_frozen(t):
     return val(t, "Freeze", "false") == "true"
 
@@ -538,6 +542,11 @@ def flatten_group(model, g, ids, utility_template, copy_fx, report):
                     "%s feeds %s (%s); that signal now includes the group %s" % (
                         name(k), other, tap, " and ".join(changed)))
 
+        # a soloed group makes all of its children audible: carry the solo down
+        if is_solo(g) and not is_solo(k):
+            mixer(k).find("SoloSink").set("Value", "true")
+            c["solo"] = "group was soloed"
+
         # 4. group off -> children off
         if not g_on and is_on(k):
             set_val(mixer(k), "Speaker/Manual", "false")
@@ -731,6 +740,8 @@ def scan(model):
             flags.append("vocal")
         if not is_on(t):
             flags.append("off")
+        if is_solo(t):
+            flags.append("solo")
         if is_frozen(t):
             flags.append("frozen")
         rows.append({
@@ -832,6 +843,11 @@ def run(args):
         else:
             report["warnings"].append(info)
 
+    soloed = [name(t) for t in model.tracks if is_solo(t)]
+    if soloed:
+        report["warnings"].append(
+            "solo is active on: %s. Only soloed tracks are heard (and exported as audible in a mix bounce); "
+            "clear the solos in Live before exporting if that is not intended" % ", ".join(soloed))
     names = [name(t) for t in model.tracks if t.tag != "GroupTrack"]
     dups = sorted({n for n in names if names.count(n) > 1})
     if dups:
@@ -870,12 +886,13 @@ def print_report(r):
         same = 0
         for c in g["children"]:
             a, b = c["volume"].split(" -> ")
-            if a == b and not ({"pre_gain", "muted", "automation", "note"} & set(c)):
+            if a == b and not ({"pre_gain", "muted", "automation", "note", "solo"} & set(c)):
                 same += 1
                 continue
             extra = (", pre-gain Utility %s" % c["pre_gain"]) if "pre_gain" in c else ""
             extra += (", muted (%s)" % c["muted"]) if "muted" in c else ""
             extra += (", %s" % c["automation"]) if "automation" in c else ""
+            extra += (", solo (%s)" % c["solo"]) if "solo" in c else ""
             extra += ("  [%s]" % c["note"]) if "note" in c else ""
             print("    - %s: %s%s" % (c["track"], c["volume"], extra))
         if same:

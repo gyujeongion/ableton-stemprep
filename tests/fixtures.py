@@ -35,7 +35,7 @@ def utility(list_id=0):
 
 
 def track(kind, tid, name, group="-1", vol=1.0, pan=0.0, on=True, devices=(), clips=(),
-          sends=(), out="AudioOut/Main", frozen=False, inputs=()):
+          sends=(), out="AudioOut/Main", frozen=False, inputs=(), solo=False):
     t = ET.Element(kind, Id=str(tid))
     n = ET.SubElement(t, "Name")
     ET.SubElement(n, "EffectiveName", Value=name)
@@ -56,6 +56,7 @@ def track(kind, tid, name, group="-1", vol=1.0, pan=0.0, on=True, devices=(), cl
         h = ET.SubElement(s, "TrackSendHolder", Id=str(i))
         _param(h, "Send", amt)
     _param(m, "Speaker", "true" if on else "false")
+    ET.SubElement(m, "SoloSink", Value="true" if solo else "false")
     ET.SubElement(m, "PanMode", Value="0")
     _param(m, "Pan", pan)
     _param(m, "Volume", vol)
