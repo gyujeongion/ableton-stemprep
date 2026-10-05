@@ -146,6 +146,17 @@ class FlattenEffects(Base):
         _, out = self.run_tool("--range", "none")
         self.assertAlmostEqual(sp.send_amount(sp.send_holders(self.track(out, "x"))[0]), 0.4)
 
+    def test_post_fader_send_with_pre_gain_utility(self):
+        # child fader -11.5 dB, group -6 dB with effects: send must stay at the same absolute level
+        g = fx.track("GroupTrack", 1, "g", vol=0.5, devices=[fx.device("Saturator")])
+        k = fx.track("AudioTrack", 2, "x", group=1, vol=lin(-11.5), sends=[0.4], out="AudioOut/GroupTrack")
+        self.build([g, k], returns=1, sends_pre=[False])
+        _, out = self.run_tool("--range", "none")
+        t = self.track(out, "x")
+        # original tap = child level * 0.4; new tap = utility * group fader * new send
+        new = lin(-11.5) * sp.volume(t) * sp.send_amount(sp.send_holders(t)[0])
+        self.assertAlmostEqual(new, lin(-11.5) * 0.4, places=6)
+
     def test_modulation_effects_are_flagged(self):
         g = fx.track("GroupTrack", 1, "pads", devices=[fx.device("Chorus2")])
         k = fx.track("AudioTrack", 2, "pad", group=1, out="AudioOut/GroupTrack")

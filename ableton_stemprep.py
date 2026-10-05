@@ -503,7 +503,9 @@ def flatten_group(model, g, ids, utility_template, copy_fx, report):
         c["volume"] = "%s -> %s" % (fmt_db(k_vol), fmt_db(new_vol))
 
         # 3. sends: post-fader sends now sit after the group gain (and effects)
-        factor = new_vol / k_vol if k_vol > 0 else 1.0
+        # post-fader tap: the child level (fader or pre-gain Utility) is unchanged,
+        # so only the group fader gain is added in front of it
+        factor = g_vol if g_vol > 0 else 1.0
         for i, h in enumerate(send_holders(k)):
             amt = send_amount(h)
             if amt <= SEND_MIN * 1.01:
