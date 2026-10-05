@@ -149,10 +149,12 @@ class FlattenEffects(Base):
     def test_post_fader_send_with_pre_gain_utility(self):
         # child fader -11.5 dB, group -6 dB with effects: send must stay at the same absolute level
         g = fx.track("GroupTrack", 1, "g", vol=0.5, devices=[fx.device("Saturator")])
-        k = fx.track("AudioTrack", 2, "x", group=1, vol=lin(-11.5), sends=[0.4], out="AudioOut/GroupTrack")
+        k = fx.track("AudioTrack", 2, "x", group=1, vol=lin(-11.5), sends=[0.4], out="AudioOut/GroupTrack",
+                     devices=[fx.utility(0)])  # also provides the Utility template
         self.build([g, k], returns=1, sends_pre=[False])
         _, out = self.run_tool("--range", "none")
         t = self.track(out, "x")
+        self.assertAlmostEqual(sp.volume(t), 0.5)  # Utility carries the child level
         # original tap = child level * 0.4; new tap = utility * group fader * new send
         new = lin(-11.5) * sp.volume(t) * sp.send_amount(sp.send_holders(t)[0])
         self.assertAlmostEqual(new, lin(-11.5) * 0.4, places=6)
